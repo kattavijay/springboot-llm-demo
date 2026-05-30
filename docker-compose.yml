@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+
+  # ── Spring Boot app ──────────────────────────────────────────────────────────
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/llmdemo
+      SPRING_DATASOURCE_USERNAME: llmuser
+      SPRING_DATASOURCE_PASSWORD: llmpass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── PostgreSQL + pgvector (Vector DB / Knowledge Base) ───────────────────────
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: llmdemo
+      POSTGRES_USER: llmuser
+      POSTGRES_PASSWORD: llmpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmuser -d llmdemo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Prometheus (Monitoring) ──────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  # ── Grafana (Monitoring dashboard) ──────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:
